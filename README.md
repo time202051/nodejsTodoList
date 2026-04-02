@@ -1,5 +1,7 @@
 # nodejsTodoList
 
+![Node.js TodoList 项目总结](public/002.png)
+
 1. 创建数据库
 SQLCREATE DATABASE IF NOT EXISTS lijiapeng
 - 作用：如果 lijiapeng 数据库不存在，就创建它
