@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TodoList - Node.js学习案例</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        #todoInput {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        #todoInput:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        #addBtn {
+            padding: 12px 25px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background 0.3s;
+        }
+        #addBtn:hover {
+            background: #5568d3;
+        }
+        .todo-list {
+            list-style: none;
+        }
+        .todo-item {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            transition: background 0.3s;
+        }
+        .todo-item:hover {
+            background: #f8f9fa;
+        }
+        .todo-item.completed .todo-text {
+            text-decoration: line-through;
+            color: #999;
+        }
+        .todo-checkbox {
+            width: 20px;
+            height: 20px;
+            margin-right: 15px;
+            cursor: pointer;
+        }
+        .todo-text {
+            flex: 1;
+            font-size: 16px;
+            color: #333;
+        }
+        .todo-actions {
+            display: flex;
+            gap: 10px;
+        }
+        .edit-btn, .delete-btn {
+            padding: 5px 15px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: opacity 0.3s;
+        }
+        .edit-btn {
+            background: #28a745;
+            color: white;
+        }
+        .delete-btn {
+            background: #dc3545;
+            color: white;
+        }
+        .edit-btn:hover, .delete-btn:hover {
+            opacity: 0.8;
+        }
+        .edit-input {
+            flex: 1;
+            padding: 8px;
+            border: 2px solid #667eea;
+            border-radius: 3px;
+            font-size: 16px;
+            margin-right: 10px;
+        }
+        .edit-input:focus {
+            outline: none;
+        }
+        .save-btn {
+            padding: 8px 15px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-right: 10px;
+        }
+        .cancel-btn {
+            padding: 8px 15px;
+            background: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📝 TodoList</h1>
+        <div id="error" class="error" style="display: none;"></div>
+        <div class="input-group">
+            <input type="text" id="todoInput" placeholder="输入新的待办事项...">
+            <button id="addBtn">添加</button>
+        </div>
+        <ul id="todoList" class="todo-list">
+            <div class="loading">加载中...</div>
+        </ul>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000';
+        let todos = [];
+
+        async function fetchTodos() {
+            try {
+                const response = await fetch(`${API_BASE}/todos`);
+                const result = await response.json();
+                if (result.code === 200) {
+                    todos = result.data;
+                    renderTodos();
+                }
+            } catch (error) {
+                showError('获取数据失败，请确保服务器正在运行');
+                console.error('Error:', error);
+            }
+        }
+
+        async function addTodo(text) {
+            try {
+                const response = await fetch(`${API_BASE}/todos`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ text })
+                });
+                const result = await response.json();
+                if (result.code === 200) {
+                    todos.push(result.data);
+                    renderTodos();
+                    return true;
+                } else {
+                    showError(result.message);
+                    return false;
+                }
+            } catch (error) {
+                showError('添加失败，请检查网络连接');
+                console.error('Error:', error);
+                return false;
+            }
+        }
+
+        async function toggleTodo(id, completed) {
+            try {
+                const response = await fetch(`${API_BASE}/todos/${id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ completed })
+                });
+                const result = await response.json();
+                if (result.code === 200) {
+                    const index = todos.findIndex(t => t.id === id);
+                    if (index !== -1) {
+                        todos[index] = result.data;
+                        renderTodos();
+                    }
+                }
+            } catch (error) {
+                showError('更新失败，请检查网络连接');
+                console.error('Error:', error);
+            }
+        }
+
+        async function updateTodo(id, text) {
+            try {
+                const response = await fetch(`${API_BASE}/todos/${id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ text })
+                });
+                const result = await response.json();
+                if (result.code === 200) {
+                    const index = todos.findIndex(t => t.id === id);
+                    if (index !== -1) {
+                        todos[index] = result.data;
+                        renderTodos();
+                    }
+                    return true;
+                } else {
+                    showError(result.message);
+                    return false;
+                }
+            } catch (error) {
+                showError('更新失败，请检查网络连接');
+                console.error('Error:', error);
+                return false;
+            }
+        }
+
+        async function deleteTodo(id) {
+            try {
+                const response = await fetch(`${API_BASE}/todos/${id}`, {
+                    method: 'DELETE'
+                });
+                const result = await response.json();
+                if (result.code === 200) {
+                    todos = todos.filter(t => t.id !== id);
+                    renderTodos();
+                }
+            } catch (error) {
+                showError('删除失败，请检查网络连接');
+                console.error('Error:', error);
+            }
+        }
+
+        function renderTodos() {
+            const todoList = document.getElementById('todoList');
+            if (todos.length === 0) {
+                todoList.innerHTML = '<div class="loading">暂无待办事项</div>';
+                return;
+            }
+            todoList.innerHTML = todos.map(todo => `
+                <li class="todo-item ${todo.completed ? 'completed' : ''}" data-id="${todo.id}">
+                    <input type="checkbox" class="todo-checkbox" ${todo.completed ? 'checked' : ''}>
+                    <span class="todo-text">${todo.text}</span>
+                    <div class="todo-actions">
+                        <button class="edit-btn">编辑</button>
+                        <button class="delete-btn">删除</button>
+                    </div>
+                </li>
+            `).join('');
+
+            attachEventListeners();
+        }
+
+        function attachEventListeners() {
+            document.querySelectorAll('.todo-checkbox').forEach(checkbox => {
+                checkbox.addEventListener('change', (e) => {
+                    const id = parseInt(e.target.closest('.todo-item').dataset.id);
+                    toggleTodo(id, e.target.checked);
+                });
+            });
+
+            document.querySelectorAll('.edit-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const todoItem = e.target.closest('.todo-item');
+                    const id = parseInt(todoItem.dataset.id);
+                    const todo = todos.find(t => t.id === id);
+                    if (todo) {
+                        showEditForm(todoItem, todo);
+                    }
+                });
+            });
+
+            document.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const id = parseInt(e.target.closest('.todo-item').dataset.id);
+                    if (confirm('确定要删除这个待办事项吗？')) {
+                        deleteTodo(id);
+                    }
+                });
+            });
+        }
+
+        function showEditForm(todoItem, todo) {
+            const todoText = todoItem.querySelector('.todo-text');
+            const todoActions = todoItem.querySelector('.todo-actions');
+            
+            const originalText = todo.text;
+            
+            todoText.innerHTML = `<input type="text" class="edit-input" value="${originalText}">`;
+            todoActions.innerHTML = `
+                <button class="save-btn">保存</button>
+                <button class="cancel-btn">取消</button>
+            `;
+
+            const editInput = todoText.querySelector('.edit-input');
+            editInput.focus();
+
+            const saveBtn = todoActions.querySelector('.save-btn');
+            const cancelBtn = todoActions.querySelector('.cancel-btn');
+
+            saveBtn.addEventListener('click', () => {
+                const newText = editInput.value.trim();
+                if (newText && newText !== originalText) {
+                    updateTodo(todo.id, newText);
+                } else {
+                    renderTodos();
+                }
+            });
+
+            cancelBtn.addEventListener('click', () => {
+                renderTodos();
+            });
+
+            editInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    saveBtn.click();
+                }
+            });
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 3000);
+        }
+
+        document.getElementById('addBtn').addEventListener('click', () => {
+            const input = document.getElementById('todoInput');
+            const text = input.value.trim();
+            if (text) {
+                addTodo(text).then(success => {
+                    if (success) {
+                        input.value = '';
+                    }
+                });
+            } else {
+                showError('请输入待办事项内容');
+            }
+        });
+
+        document.getElementById('todoInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('addBtn').click();
+            }
+        });
+
+        fetchTodos();
+    </script>
+</body>
+</html>
